@@ -1,0 +1,575 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ΑΔΩ — the field, live</title>
+<meta name="description" content="A field organism. It recalls what it holds, refuses what it does not, and says when the words are its own but the arrangement is not. No model, no weights, no training.">
+<style>
+:root{--paper:#FFF;--ink:#0A0A0A;--mut:#6B6B6B;--line:#E4E4E4;--hold:#8A6D00;
+--sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+--mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;--w:1080px}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--paper)}
+body{color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+/* the field, rendered live behind everything. the ledger's trits sit where the
+   sunflower puts them -- Vogel, 2πkφ, three layers φ⁷ apart -- and a query lights
+   the ones it touches. */
+#field{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.85}
+.nav,.wrap{position:relative;z-index:1}
+.nav{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1px solid var(--ink)}
+.nav .in{max-width:var(--w);margin:0 auto;padding:0 32px;display:flex;align-items:center;justify-content:space-between;height:60px}
+.brand{font-weight:800;font-size:15px;letter-spacing:.02em;font-family:var(--mono)}
+.tools{display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:11px;color:var(--mut)}
+.tools button{border:1px solid var(--ink);background:var(--paper);color:var(--ink);font-family:var(--mono);
+font-size:11px;padding:5px 10px;cursor:pointer;letter-spacing:.04em}
+.tools button:hover{background:var(--ink);color:var(--paper)}
+/* The will slider lives in .ctl, not .tools. Scoping the rule to .tools meant #will
+   rendered as a native OS control — a blue thumb in a page with no other rounded or
+   coloured geometry. Selector widened; the rule was always right, its scope was not. */
+.tools input[type=range],.ctl input[type=range]{-webkit-appearance:none;appearance:none;height:2px;background:var(--ink);width:110px;cursor:pointer}
+.tools input[type=range]::-webkit-slider-thumb,.ctl input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:var(--ink);
+border:2px solid var(--paper);box-shadow:0 0 0 1px var(--ink);border-radius:50%;cursor:pointer}
+.wrap{max-width:var(--w);margin:0 auto;padding:28px 32px 40px}
+.panel{border:1px solid var(--ink)}
+.bar{border-bottom:1px solid var(--ink);padding:12px 18px;display:flex;justify-content:space-between;
+align-items:center;gap:12px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+.dot{display:inline-block;width:8px;height:8px;border:1px solid var(--ink);border-radius:50%;margin-right:7px;background:var(--paper)}
+.dot.on{background:var(--ink)}.dot.busy{background:var(--mut);border-color:var(--mut)}
+.ctl{border-bottom:1px solid var(--line);padding:9px 18px;display:flex;gap:10px;align-items:center;
+flex-wrap:wrap;font-family:var(--mono);font-size:11px}
+.ctl select,.ctl .btn{border:1px solid var(--ink);background:var(--paper);color:var(--ink);
+font-family:var(--mono);font-size:11px;padding:5px 9px;cursor:pointer}
+.ctl .btn:hover,.ctl select:hover{background:var(--ink);color:var(--paper)}
+.ctl .cn{color:var(--mut);margin-left:auto}
+.ctl .lbl{color:var(--mut);letter-spacing:.12em;text-transform:uppercase;font-size:10px}
+.chips{padding:10px 18px 0;display:flex;gap:7px;flex-wrap:wrap}
+.chip{font-family:var(--mono);font-size:10.5px;border:1px solid var(--line);background:var(--paper);
+padding:5px 9px;cursor:pointer;color:var(--mut)}
+.chip:hover{border-color:var(--ink);color:var(--ink)}
+.chat{padding:20px;min-height:340px;display:flex;flex-direction:column;gap:16px}
+.msg{max-width:78ch}
+.who{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:5px}
+.bub{border:1px solid var(--ink);padding:11px 14px;white-space:pre-wrap;background:rgba(255,255,255,.93)}
+.msg.you{align-self:flex-end;text-align:right}
+.msg.you .bub{background:var(--ink);color:var(--paper)}
+.verd{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
+.v-speak{color:var(--ink)} .v-hold{color:var(--hold)} .v-burp{color:var(--mut)}
+.bub.hold{border-style:dashed;border-color:var(--hold)}
+.bub.burp{border-style:dashed;color:var(--mut);font-family:var(--mono);font-size:13px}
+.tiles{margin-top:7px;font-family:var(--mono);font-size:13px;letter-spacing:2px;color:var(--mut)}
+.cap{font-family:var(--mono);font-size:10px;color:var(--mut);margin-top:5px;letter-spacing:.04em}
+.row{display:flex;border-top:1px solid var(--ink)}
+.row input{flex:1;border:0;padding:14px 18px;font:inherit;font-size:15px;outline:none;background:var(--paper);color:var(--ink)}
+.row button{border:0;border-left:1px solid var(--ink);background:var(--paper);padding:0 26px;
+font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+.row button:hover:not(:disabled){background:var(--ink);color:var(--paper)}
+.row button:disabled{color:var(--mut);cursor:default}
+.legend{margin-top:22px;font-family:var(--mono);font-size:11px;color:var(--mut);line-height:1.9}
+.legend b{color:var(--ink);font-weight:700}
+/* ---- MINIMAL MODE: full screen ---- */
+body.min{height:100vh;overflow:hidden}
+body.min .nav{border-bottom:0}
+body.min .nav .in{max-width:none;padding:0 20px;height:44px}
+body.min .legend,body.min .bar,body.min .ctl,body.min .chips{display:none}
+body.min .wrap{max-width:none;width:100%;height:calc(100vh - 44px);padding:0;display:flex}
+body.min .panel{flex:1;border:0;display:flex;flex-direction:column;min-height:0}
+body.min .chat{flex:1;overflow-y:auto;padding:26px max(24px,calc((100vw - var(--w))/2))}
+body.min .row{border-top:1px solid var(--ink)}
+</style></head><body>
+<canvas id="field"></canvas>
+<div class="nav"><div class="in">
+  <span class="brand">ΑΔΩ</span>
+  <span class="tools">
+    <span>width</span><input type="range" id="w" min="620" max="1600" step="20" value="1080">
+    <span id="wv">1080</span>
+    <button id="mode">full screen</button><button id="clr">clear</button>
+    <span id="status"><span class="dot busy"></span>waking…</span>
+  </span>
+</div></div>
+<div class="wrap"><div class="panel">
+  <div class="bar"><span id="fed">—</span><span id="poles">—</span></div>
+  <div class="ctl">
+    <span class="lbl">ledger</span><select id="lib" title="what it reads — the corpus in Δ"></select>
+    <label class="btn">⬆ feed a file<input type="file" id="file" accept=".txt,.md,.100,text/*" hidden></label>
+    <span class="lbl">lens</span><select id="lens" title="how bytes are read — where each of the 256 byte values sits">
+      <option value="derived">derived — positions from the corpus's own company</option>
+      <option value="hash">byte hash — model-free, no corpus pass</option>
+    </select>
+    <span class="lbl">will</span><input type="range" id="will" min="0" max="100" value="50"
+      title="where the boundary sits between the two order poles — how willing it is to speak when it knows the words but not the order">
+    <span id="wn" class="cn">—</span>
+    <span id="cn" class="cn">—</span>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="chat" id="chat"></div>
+  <div class="row"><input id="q" placeholder="say something to the field…" autocomplete="off" spellcheck="false" disabled>
+    <button id="go" disabled>listen</button></div>
+</div>
+<div class="legend">
+  <b>mine, in order</b> — it holds this, in this arrangement. it speaks.<br>
+  <b>my words, not my order</b> — its vocabulary, an arrangement it does not hold. it speaks, and says so.<br>
+  <b>not mine</b> — nothing rings. certified silence rather than a guess.<br>
+  <span style="color:var(--ink)">ledger</span> is what it reads.
+  <span style="color:var(--ink)">lens</span> is how bytes are read — where each of the 256
+  byte values sits before any of this runs. They are independent: same story, different
+  alphabet, or the same alphabet over a different story.<br>
+  the field only draws <span style="color:var(--ink)">where it is working</span>. loading, that
+  is every state placed so far. asking, it is the read window at each step of the walk —
+  a few dozen states out of a hundred thousand — so you see how little of it a question
+  actually touches.<br>
+close enough to read, every mark is its <span style="color:var(--ink)">tile</span>, and the
+  tile is laid out the way the field is: <span style="color:var(--ink)">band</span> is the
+  ring |q| = 1, 2, 3, spaced quadratically from the middle;
+  <span style="color:var(--ink)">colour</span> is the sector, eight of them, from the phase
+  2πjφ; <span style="color:var(--ink)">alpha</span> is the sign — positive comes forward,
+  negative sits back and shaded. Four squares meet at the middle pinpoint: the R4 quadrants,
+  the address before it has said anything. The null has no band, so the core is its own
+  small sunflower — that is where 78.72% of a tile lives. The three faces −, =, + line up
+  along the seed's own radius, φ⁷ apart, and overlap back into the whole tile: negative
+  behind, null between, positive in front. A trit is exactly as wide as its own place:
+  neighbours in the spiral sit 1.706626 apart, so a mark of radius 0.882703 bleeds into the
+  one beside it by φ⁷ — 3.33% — the same leak the layers have. When the trajectory lands, everything that now
+  agrees with what was read eases in behind it, deepest agreement first — that is θ, two
+  faces of three. Scroll to get closer, drag to move, double-click to hand it back. A small mark shows the coordinate coarsened
+  to the first band — 8 sectors × 3 bands, area by count — because 256 cells cannot be drawn
+  in 39 pixels without merging; zoom in and the full 256 appear. Further out still, a mark
+  is a dot in its loudest sector.
+</div></div>
+<script>
+const $=id=>document.getElementById(id);
+let ω=null, A=null, T=null, REG=null, CORPUS=null, LENS='derived';
+const CHIPS=['The silence ','Everything is ','Nothing was ','In the beginning '];
+// a deterministic byte hash — model-free, no corpus pass. Measured equal to the derived
+// encoder on recall, junk refusal and needle recall; see BENCHMARK.md.
+function hashLens(){ const EN=new Float32Array(256*A.DIM);
+  for(let b=0;b<256;b++){ let h=((b+1)*2654435761 ^ 1)>>>0;
+    for(let j=0;j<A.FILL;j++){ h=(Math.imul(h,1664525)+1013904223)>>>0;
+      EN[b*A.DIM+j]=(h>>>8)/8388608-1; } }
+  return EN; }
+async function fetchBytes(u){ const ab=await (await fetch(u)).arrayBuffer();
+  const r=new Uint8Array(ab); let o='';
+  for(let i=0;i<r.length;i++) o+=String.fromCharCode(r[i]);
+  return o; }
+function build(text, name){
+  setStatus('busy','feeding '+name+'…');
+  ω=new A.Organism().feed(text, LENS==='hash'?hashLens():null);
+  ω.measureOrderPole(210);
+  CORPUS=text;
+  $('poles').textContent='ἁρμονία '+ω.poles.answered.toFixed(3)+'/'+ω.poles.stranger.toFixed(3)
+    +'  ·  ῥυθμός '+ω.orderPoles.ordered.toFixed(3)+'/'+ω.orderPoles.scrambled.toFixed(3);
+  $('cn').textContent=name+' · '+(text.length/1024).toFixed(1)+' KB';
+  fieldFrom(ω);
+  setStatus('on','ready'); $('q').disabled=false; $('go').disabled=false;
+  try{ sayWill(); }catch(e){}
+}
+const TILE=['□','■','◧','◆'];   // 1 · A · B · AB — the same four the field draws
+// ---- live field ----
+const CV=$('field'), CX=CV.getContext('2d');
+let SEEDS=[], SPIN=0, RAF=null, WALK=[], WALKN=0;
+const GOLDA=2*Math.PI*((Math.sqrt(5)-1)/2);
+const PHI=(Math.sqrt(5)-1)/2, SECT=8;          // eight sectors — the sound couplings
+const SEP=2*Math.sin(Math.PI*Math.pow(PHI,7));  // 0.21598 — the φ⁷ layer separation
+// BAND / COLOUR / ALPHA. Not my invention and not a palette: it is what R4 already is.
+// In τ the two generators split a cell two ways at every level —
+//     g = (r >= rM ? 0 : 1) | ((th < aM ? 0 : 1) << 1)
+// inversion is the RADIAL bit and conjugation is the ANGULAR one, and the resolution
+// doubles each level: 2 4 8 16 32 64. So
+//     band    which ring you are on          — |q|, and the bands hold the meaning
+//     colour  which sector around the centre — the angle, 2πjφ, eight couplings
+//     alpha   further or closer than the cell reference — the sign, front or back
+// A tile is therefore not a raster. Its 256 dimensions are placed by their own phase,
+// exactly the way the field places its states, so the tile is the field again one
+// level down. Positive comes forward at full alpha; negative sits back, shaded; the
+// null has no band and settles into the core, which is where 78.72% of it lives.
+const SHADE=[0.10,1.00,0.34];                  // null · positive (front) · negative (back)
+let TIMG=null, TCRS=null, TSEC=null;           // fine tiles · coarse tiles · loudest sector
+const hue=s=>'hsl('+(s*(360/SECT))+' 70% 47%)';
+function seedsOf(buf, addr, count){
+  const out=[];
+  for(let k=0;k<count&&k<buf.length;k++){
+    const A=addr.get(buf[k]); if(!A) continue;
+    const rad=Math.sqrt(k+1), th=GOLDA*k;
+    for(let L=2;L>=0;L--){                       // pushed back to front: N, Z, then P
+      const w=A[L]||[];
+      out.push({k,b:buf[k],L,th,x:rad*Math.cos(th),y:rad*Math.sin(th),d:w.length,rad,
+                w, g:w.length?w[0]:0}); } }   // b = the byte · w = the whole address word
+  return out;
+}
+// THE TILE ITSELF. DIM = 256 = 16 x 16, values -3..+3. faces() splits it three ways —
+// P where positive, Z where null, N where negative — and those masks lose nothing, but
+// they do not sit on top of each other: the φ⁷ layer offset is a rotation at fixed
+// radius, so the three faces of one state arc 6.4 field units apart by k = 886 and 27
+// by the end of the ledger. Masks would never recombine on screen. So each mark draws
+// the WHOLE tile and its position says which face it is. Only FILL = 64 of the 256
+// carry signal; the twelve dead rows are the null channel, and they are why DIM is
+// not 64 — cutting them took the reading from 0.985 to 0.316.
+// the bands are spaced QUADRATICALLY from the middle pinpoint. Not a style choice:
+// τ splits radius at the geometric mean, √(rlo·rhi), and the field itself places state
+// k at radius √k — so equal steps in the band index are equal steps in area, and the
+// radius goes as the square. Band |q| sits at R·(q/3)². The middle is a pinpoint where
+// four squares meet: the four R4 quadrants, which is the address before it has said
+// anything. Each is tinted by its own dominant sector and weighted by its share of the
+// tile, so the centre is the tile's summary and the bands are its detail.
+const QR=q=>(q/3)*(q/3);                        // quadratic band radius, 1/9 · 4/9 · 1
+// ONE MASK PER FACE, and the three of them line up. P is every positive cell, N every
+// negative, Z every null — the three lose nothing, and now that all three sit on the
+// same seed they superimpose back into the whole tile. They step outward along the
+// seed's own radius by φ⁷ — 0.216 of the mark — so the stack reads as three things
+// rather than one, and P lands on top because positive comes forward.
+function bakeTiles(EN){
+  TIMG=[[],[],[]]; TCRS=[]; TSEC=[];
+  const S=160, c=S/2, R=(S/2)*0.90, dot=S/46, QS=S/26;
+  for(let b=0;b<256;b++){
+    const t=A.tile(EN,b);
+    const load=new Float64Array(SECT), quad=new Float64Array(4), qsec=[];
+    for(let i=0;i<4;i++) qsec.push(new Float64Array(SECT));
+    let nulls=0; for(let j=0;j<256;j++) if(!t[j]) nulls++;
+    const cvs=[0,1,2].map(()=>{ const e=document.createElement('canvas');
+      e.width=S; e.height=S; return e; });
+    let seen=0;
+    for(let j=0;j<256;j++){
+      const q=t[j], f=q>0?0:q<0?2:1, g=cvs[f].getContext('2d');
+      const th=2*Math.PI*j*PHI, a=((th%(2*Math.PI))+2*Math.PI)%(2*Math.PI);
+      const sec=Math.floor(SECT*a/(2*Math.PI))%SECT;
+      // the null has no band, so the core is its own little sunflower — √rank, the
+      // same rule the field uses — instead of 200 cells stacked on one point.
+      const rad = q ? R*QR(Math.abs(q)) : R*0.30*Math.sqrt((seen++)/(nulls||1));
+      g.fillStyle=hue(sec); g.globalAlpha=SHADE[q>0?1:q<0?2:0];
+      g.beginPath(); g.arc(c+rad*Math.cos(a), c+rad*Math.sin(a), q?dot:dot*0.42, 0, 6.283); g.fill();
+      if(q){ load[sec]+=Math.abs(q);
+        const qd=(Math.abs(q)>=2?0:1)|((a<Math.PI?0:1)<<1);   // the R4 split, on the tile
+        quad[qd]+=Math.abs(q); qsec[qd][sec]+=Math.abs(q); } }
+    // the middle pinpoint rides the Z layer — the anchor sits between back and front
+    const g=cvs[1].getContext('2d'), tot=quad[0]+quad[1]+quad[2]+quad[3]+1e-9;
+    for(let qd=0;qd<4;qd++){
+      let top=0; for(let i=1;i<SECT;i++) if(qsec[qd][i]>qsec[qd][top]) top=i;
+      g.fillStyle=hue(top); g.globalAlpha=Math.min(1,0.30+1.75*(quad[qd]/tot));
+      g.fillRect(c+((qd&1)?-QS:0), c+((qd>>1)?-QS:0), QS, QS); }
+    g.globalAlpha=1; g.strokeStyle='rgba(10,10,10,.35)'; g.lineWidth=S/110;
+    g.strokeRect(c-QS,c-QS,QS*2,QS*2);
+    g.beginPath(); g.moveTo(c-QS,c); g.lineTo(c+QS,c);
+    g.moveTo(c,c-QS); g.lineTo(c,c+QS); g.stroke();
+    let top=0; for(let i=1;i<SECT;i++) if(load[i]>load[top]) top=i;
+    TSEC.push(top);
+    for(let f=0;f<3;f++) TIMG[f].push(cvs[f]);
+    TCRS.push(coarse(t, nulls, S, c, R, QS, quad, qsec)); }
+}
+// THE SAME COORDINATE, AT THE RESOLUTION A SMALL MARK CAN HOLD. 256 dots cannot be drawn
+// in 39 pixels — they merge and the tile reads solid. So below that, aggregate to the
+// first band: 8 sectors x 3 bands = at most 24 cells per face, which is exactly coord.js's
+// coarsest band and not a simplification I invented. Area carries the count, so a fat cell
+// is a loud one. This is why a small mark looked solid and the big render did not.
+function coarse(t, nulls, S, c, R, QS, quad, qsec){
+  const out=[];
+  for(let f=0;f<3;f++){
+    const cv=document.createElement('canvas'); cv.width=S; cv.height=S;
+    const g=cv.getContext('2d');
+    const acc=new Float64Array(SECT*3);
+    for(let j=0;j<256;j++){ const q=t[j]; if(!q) continue;
+      if((q>0?0:2)!==f) continue;
+      const a=((2*Math.PI*j*PHI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI);
+      acc[(Math.floor(SECT*a/(2*Math.PI))%SECT)*3+(Math.abs(q)-1)]++; }
+    for(let sec=0;sec<SECT;sec++) for(let bd=0;bd<3;bd++){
+      const cnt=acc[sec*3+bd]; if(!cnt) continue;
+      const a=(sec+0.5)*(2*Math.PI/SECT), rad=R*QR(bd+1);
+      g.fillStyle=hue(sec); g.globalAlpha=SHADE[f===0?1:2];
+      g.beginPath(); g.arc(c+rad*Math.cos(a), c+rad*Math.sin(a), (S/30)*Math.sqrt(cnt), 0, 6.283);
+      g.fill(); }
+    if(f===1){                                     // the null as one disc, and the pinpoint
+      g.fillStyle='#7b8496'; g.globalAlpha=0.16;
+      g.beginPath(); g.arc(c,c,R*0.30*Math.sqrt(nulls/256),0,6.283); g.fill();
+      const tot=quad[0]+quad[1]+quad[2]+quad[3]+1e-9, Q=QS*0.62;
+      for(let qd=0;qd<4;qd++){
+        let top=0; for(let i=1;i<SECT;i++) if(qsec[qd][i]>qsec[qd][top]) top=i;
+        g.fillStyle=hue(top); g.globalAlpha=Math.min(0.85,0.25+1.4*(quad[qd]/tot));
+        g.fillRect(c+((qd&1)?-Q:0), c+((qd>>1)?-Q:0), Q, Q); } }
+    out.push(cv); }
+  return out;
+}
+function fitCanvas(){ const r=window.devicePixelRatio||1;
+  const w=CV.clientWidth||window.innerWidth, h=CV.clientHeight||window.innerHeight;
+  CV.width=w*r; CV.height=h*r; CX.setTransform(r,0,0,r,0,0); CV._w=w; CV._h=h; }
+// ONLY WHAT IS PROCESSING.
+// The view is the field, seen whole — but a mark is drawn only where the field is
+// actually working. While the ledger loads, that is everything placed so far, so the
+// flower grows. Once you ask something it is the read window at each step of the walk:
+// W bytes back from where it stands, and W is the Crown window, so on a ledger this
+// size only a few dozen states out of a hundred thousand are ever live at once. The
+// frame follows the bounding box of whatever is live, and the marks grow as their
+// number falls — there is no point drawing forty tiles at the size of forty thousand.
+let CAM=[0,0], CAMT=[0,0], UNIT=1, UNITT=1, ZOOM=1, MANUAL=false;
+// THE MARK SIZE IS NOT A CHOICE. A trit overlaps its neighbour by the bleed. The Vogel
+// spiral puts nearest neighbours 1.706626 field units apart — measured at k = 50 through
+// 19000, constant to 8e-2 across the whole disc — so a trit that bleeds into the one
+// beside it by φ⁷ has diameter 1.706626·(1+φ⁷) = 1.765406 and radius 0.882703. The
+// overlap is 3.33% of the mark. Nothing tuned; it falls out of the placement.
+const NN=1.706626, RAD=NN*(1+Math.pow((Math.sqrt(5)-1)/2,7))/2;
+let ACT=null, ACTN=0, FRAMED=false, FRAME=0;  // ACT null = the whole field is live
+let WPOS=0, ALIGN=null;                       // continuous position along the walk
+const HOPF=34;                                // frames per hop — the visual runs behind
+function place(at){ const rad=Math.sqrt(at+1), th=GOLDA*at;
+  return [rad*Math.cos(th), rad*Math.sin(th)]; }          // field coordinates
+const live=s=>!ACT||ACT.has(s.k);
+const fade=s=>ACT?Math.min(1,(FRAME-ACT.get(s.k))/22):1;   // a state eases in, never blinks
+function reframe(){                          // only when the live set changes
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9,c=0;
+  for(const s of SEEDS){ if(!live(s)) continue;
+    if(s.x<x0)x0=s.x; if(s.x>x1)x1=s.x; if(s.y<y0)y0=s.y; if(s.y>y1)y1=s.y; c++; }
+  ACTN=c; FRAMED=true; if(!c) return;
+  CAMT=[(x0+x1)/2,(y0+y1)/2];
+  const span=Math.max(x1-x0, y1-y0, 1.2);
+  UNITT=Math.min(CV._w||1,CV._h||1)/(span*1.30);
+}
+function paint(){
+  const w=CV._w||window.innerWidth, h=CV._h||window.innerHeight;
+  CX.clearRect(0,0,w,h);
+  if(!SEEDS.length) return;
+  if(!FRAMED) reframe();
+  if(!MANUAL){ CAM[0]+=(CAMT[0]-CAM[0])*0.055; CAM[1]+=(CAMT[1]-CAM[1])*0.055; }
+  UNIT+=(UNITT*ZOOM-UNIT)*0.055;
+  const cx=w/2, cy=h/2, co=Math.cos(SPIN), si=Math.sin(SPIN);
+  const R=(w>h?w:h)/UNIT + 2;                                        // visible radius, field units
+  const to=p=>{ const dx=p[0]-CAM[0], dy=p[1]-CAM[1];
+    return [cx+(dx*co-dy*si)*UNIT, cy+(dx*si+dy*co)*UNIT]; };
+  for(const s of SEEDS){
+    if(!live(s)) continue;                                           // not working: not drawn
+    const dx=s.x-CAM[0], dy=s.y-CAM[1];
+    if(dx>R||dx<-R||dy>R||dy<-R) continue;                           // cull before transforming
+    const x=cx+(dx*co-dy*si)*UNIT, y=cy+(dx*si+dy*co)*UNIT;
+    if(x<-6||y<-6||x>w+6||y>h+6) continue;
+    const d=s.d/MAXD, f=fade(s), r=RAD*UNIT*(0.55+0.45*f);   // derived, then eased in
+    CX.globalAlpha=(0.30+0.60*d)*f;                          // depth is the weight now
+    // THE WHOLE ADDRESS, not its first symbol. The word is written as rings from the
+    // outside in — the first R4 character is the outer ring, the last is the core — so
+    // the mark IS the address and two states with the same address look the same. A
+    // ring needs about 1.6px to read; when there is not room, fall back to the first
+    // character alone, which is what a distant mark can honestly show.
+    if(TIMG && r>=7){                       // the three faces, lined up along the radius
+      const o=s.L*SEP*r, dx2=Math.cos(s.th+SPIN)*o, dy2=Math.sin(s.th+SPIN)*o;
+      // 256 cells need about 55px of diameter before they stop merging into a blob
+      const src = r>=28 ? TIMG[s.L][s.b] : TCRS[s.b][s.L];
+      CX.drawImage(src, x+dx2-r, y+dy2-r, r*2, r*2); }
+    else { CX.fillStyle=TSEC?hue(TSEC[s.b]):'#7b8496';                 // too far: its sector
+           CX.beginPath(); CX.arc(x,y,r,0,6.283); CX.fill(); }
+  }
+  // THE TRAJECTORY. The walk is a continuous position, not a sequence of jumps: the
+  // line grows into the next hop across HOPF frames and the head rides the interpolated
+  // point, easing out of one address and into the next. It is allowed to run behind the
+  // answer — the reply is already on screen; this is the field catching up with it.
+  if(WALK.length){
+    const hop=Math.min(Math.floor(WPOS), WALK.length-1), u=Math.min(1,WPOS-hop);
+    // no per-hop easing. constant speed along the curve, so it does not brake into every
+    // field and accelerate out again — that stop-start was half of what read as straight.
+    const STEP=14;
+    CX.lineWidth=1.6; CX.lineJoin='round'; CX.strokeStyle='#0a0a0a';
+    CX.globalAlpha=0.40; CX.beginPath();
+    let a=to(curve(0,0)); CX.moveTo(a[0],a[1]);
+    for(let i=0;i<=hop && i<WALK.length-1;i++){
+      const top=(i===hop)?u:1;
+      for(let q=1;q<=STEP;q++){ const b=to(curve(i,top*q/STEP)); CX.lineTo(b[0],b[1]); } }
+    CX.stroke();
+    const head = to(hop<WALK.length-1 ? curve(hop,u) : WALK[WALK.length-1].p);
+    for(let i=0;i<=hop;i++){ const q=to(WALK[i].p);
+      CX.globalAlpha=0.45; CX.fillStyle='#0a0a0a';
+      CX.beginPath(); CX.arc(q[0],q[1],2.2,0,6.283); CX.fill(); }
+    CX.globalAlpha=0.85; CX.fillStyle='#0a0a0a';       // the head, where it is right now
+    CX.beginPath(); CX.arc(head[0],head[1],3.4,0,6.283); CX.fill(); }
+  CX.globalAlpha=1;
+}
+// THE TRAJECTORY IS A CURVE. Straight chords between hops meant the head arrived at a
+// field, stopped, turned a corner and left again — a polyline, not a path. This is a
+// centripetal Catmull-Rom through the hops: it passes through every field exactly and is
+// tangent-continuous, so the direction leaving a field is the direction that entered it.
+// The exponent is 0.5 — knots spaced by √distance — the same √ law the field places by,
+// r = √k, and it is what stops the curve cusping or looping when two hops land close.
+const _l=(a,b,t)=>[a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];
+const _d=(a,b)=>Math.max(1e-6, Math.pow(Math.hypot(b[0]-a[0],b[1]-a[1]), 0.5));
+function curve(i,u){                       // point on the segment WALK[i] -> WALK[i+1]
+  const n=WALK.length;
+  const P1=WALK[i].p, P2=WALK[Math.min(n-1,i+1)].p;
+  const P0=WALK[Math.max(0,i-1)].p, P3=WALK[Math.min(n-1,i+2)].p;
+  const t0=0, t1=t0+_d(P0,P1), t2=t1+_d(P1,P2), t3=t2+_d(P2,P3);
+  const t=t1+(t2-t1)*u;
+  const A1=_l(P0,P1,(t-t0)/(t1-t0)), A2=_l(P1,P2,(t-t1)/(t2-t1)), A3=_l(P2,P3,(t-t2)/(t3-t2));
+  const B1=_l(A1,A2,(t-t0)/(t2-t0)), B2=_l(A2,A3,(t-t1)/(t3-t1));
+  return _l(B1,B2,(t-t1)/(t2-t1));
+}
+// WHAT THE ANSWER ALIGNED. When the trajectory lands, the read windows are not the only
+// thing that moved: every state whose address passes the doorway against something that
+// was read is now in agreement with it. That is θ — two faces of three, never met only
+// exceeded — the field's own measure, not a proximity I invented. The aligned states come
+// in deepest agreement first, easing in behind the walk.
+function alignment(){
+  const seen=new Set(); for(const k of ACT.keys()) seen.add(ω.buf[k]);
+  const score=new Int32Array(256);
+  for(let b=0;b<256;b++){ const ab=ω.addr.get(b); if(!ab) continue;
+    let best=0; for(const rb of seen){ const v=A.θ(ab, ω.addr.get(rb)); if(v>best) best=v; }
+    score[b]=best; }
+  const list=[];
+  for(let k=0;k<ω.buf.length;k++){ if(ACT.has(k)) continue;
+    const v=score[ω.buf[k]]; if(v>0) list.push([k,v]); }
+  list.sort((x,y)=>y[1]-x[1]);                 // deepest agreement arrives first
+  return {list, i:0, read:ACT.size, batch:Math.max(24,Math.ceil(list.length/200))};
+}
+function loop(){
+  FRAME++; SPIN+=0.00035;
+  reveal();
+  if(ALIGN===null && WALK.length && ACT && WPOS>=WALK.length-1) ALIGN=alignment();
+  if(ALIGN && ALIGN.i<ALIGN.list.length){
+    const upto=Math.min(ALIGN.list.length, ALIGN.i+ALIGN.batch);
+    for(; ALIGN.i<upto; ALIGN.i++) ACT.set(ALIGN.list[ALIGN.i][0], FRAME);
+    FRAMED=false; sayAlign(); }
+  if(WALK.length && WPOS<WALK.length-1+0.999){
+    WPOS+=1/HOPF;
+    const hop=Math.floor(WPOS);
+    if(hop>=WALKN && hop<WALK.length){                  // arrived: its window comes online
+      for(const k of WALK[WALKN].ks) if(!ACT.has(k)) ACT.set(k,FRAME);
+      WALKN++; FRAMED=false; saySpan(); } }
+  paint(); RAF=requestAnimationFrame(loop);
+}
+// the walk arrives as real ledger positions. each step reads W bytes back from where it
+// stands -- that span, and nothing else, is what the field is processing at that step.
+function showWalk(trace){
+  const W=Math.max(1,Math.round(ω.window));
+  WALK=trace.map(t=>{ const ks=[];
+    for(let k=Math.max(0,t.at-W+1); k<=t.at; k++) ks.push(k);
+    return {p:place(t.at), a:0.9, word:t.word, ks}; });
+  WALKN=0; WPOS=0; ALIGN=null; ACT=new Map(); ACTN=0; FRAMED=false; MANUAL=false; ZOOM=1;
+  for(const k of WALK[0].ks) ACT.set(k,FRAME);          // the first window is already read
+  WALKN=1; saySpan(); }
+let PENDING=[], REVEAL=0;
+function fieldFrom(ω){
+  PENDING=seedsOf(ω.buf, ω.addr, ω.buf.length);   // the WHOLE ledger, in placement order
+  SEEDS=[]; REVEAL=0; CAM=[0,0]; CAMT=[0,0]; ACT=null; ACTN=0; FRAMED=false; WPOS=0; ALIGN=null;
+  fitCanvas();
+  MAXD=Math.max(1,...PENDING.map(s=>s.d));
+  bakeTiles(ω.EN);
+  if(!RAF) loop();
+}
+function reveal(){                    // real trits, k = 0 outward
+  if(REVEAL>=PENDING.length) return;
+  const from=REVEAL, n=Math.min(PENDING.length, REVEAL+900);
+  for(let i=from;i<n;i++) SEEDS.push(PENDING[i]);
+  REVEAL=n;
+  const done=Math.round(100*REVEAL/PENDING.length);
+  $('fed').textContent = REVEAL<PENDING.length
+    ? 'placing trits… '+done+'%'
+    : ω.pos.length.toLocaleString()+' states · window '+ω.window;
+}
+function sayAlign(){
+  if(!ALIGN||!ω) return;
+  const tot=ω.buf.length;
+  $('fed').textContent='read '+ALIGN.read+' · aligned '+ALIGN.i.toLocaleString()
+    +' of '+tot.toLocaleString()+' states · '+(100*ACT.size/tot).toFixed(1)+'% of the field';
+}
+function saySpan(){                      // how much of the field is actually working
+  if(!ACT||!ω) return;
+  const tot=ω.buf.length;
+  $('fed').textContent='reading '+ACT.size+' of '+tot.toLocaleString()
+    +' states · '+(100*ACT.size/tot).toFixed(3)+'% of the field · window '+ω.window;
+}
+
+window.addEventListener('resize',fitCanvas);
+CV.addEventListener('wheel',e=>{ e.preventDefault();
+  ZOOM=Math.max(0.15,Math.min(600,ZOOM*Math.exp(-e.deltaY*0.0015))); MANUAL=true; },{passive:false});
+let DRAG=null;
+CV.addEventListener('mousedown',e=>{ DRAG=[e.clientX,e.clientY,CAM[0],CAM[1]]; MANUAL=true; });
+window.addEventListener('mousemove',e=>{ if(!DRAG||!UNIT) return;
+  const co=Math.cos(SPIN), si=Math.sin(SPIN);
+  const dx=(e.clientX-DRAG[0])/UNIT, dy=(e.clientY-DRAG[1])/UNIT;
+  CAM[0]=DRAG[2]-(dx*co+dy*si); CAM[1]=DRAG[3]-(-dx*si+dy*co); });
+window.addEventListener('mouseup',()=>{ DRAG=null; });
+CV.addEventListener('dblclick',()=>{ ZOOM=1; MANUAL=false; FRAMED=false; });
+// nothing fake. the canvas stays empty until real trits arrive, then they are placed
+// in the order the sunflower places them -- k = 0 outward -- a few hundred per frame.
+fitCanvas(); if(!RAF) loop();
+function setStatus(k,t){ $('status').innerHTML='<span class="dot '+k+'"></span>'+t; }
+function add(cls,who,html){ const d=document.createElement('div'); d.className='msg '+cls;
+  d.innerHTML='<div class="who">'+who+'</div>'+html; $('chat').appendChild(d);
+  $('chat').scrollTop=$('chat').scrollHeight; }
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// out — bytes back to characters before they are shown. A·utf8 returns the string
+// unchanged if it is not valid UTF-8, so Latin-1 ledgers are untouched.
+const out=s=>esc(A&&A.utf8?A.utf8(String(s||'')):String(s||''));
+(async function boot(){
+  try{
+    const src=await (await fetch('Ω.js')).text();
+    const m={exports:{}}; new Function('module','exports',src)(m,m.exports); A=m.exports;
+    const tsrc=await (await fetch('%CF%84.js')).text();
+    const tm={exports:{}}; new Function('module','exports','require',tsrc)(tm,tm.exports,()=>A); T=tm.exports;
+    REG=await (await fetch('%CE%94/corpora.json')).json();
+    $('lib').innerHTML=REG.corpora.map(c=>'<option value="'+c.file+'">'+c.title+' — '+c.author+'</option>').join('');
+    $('chips').innerHTML=CHIPS.map(c=>'<span class="chip">'+c.trim()+'</span>').join('');
+    for(const el of document.querySelectorAll('.chip'))
+      el.onclick=()=>{ $('q').value=el.textContent+' '; $('q').focus(); };
+    await new Promise(r=>setTimeout(r,20));
+    await loadEntry(REG.corpora[0]);      // -> build() -> fieldFrom(): the field gets its seeds
+    $('q').focus();
+  }catch(e){
+    const msg = location.protocol==='file:'
+      ? 'serve it over http — run: python3 -m http.server 8000'
+      : (e && (e.message||e)) + '';
+    setStatus('', 'boot failed');
+    add('field','field','<div class="verd v-burp">boot failed</div>'
+      +'<div class="bub burp">'+esc(msg)+'</div>'
+      +'<div class="cap">the field behind this page is a placeholder — no ledger loaded</div>');
+    console.error('ΑΔΩ boot:', e);
+  }
+})();
+function ask(){
+  const p=$('q').value.trim(); if(!p||!ω) return;
+  add('you','you','<div class="bub">'+esc(p)+'</div>');
+  $('q').value=''; $('go').disabled=true;
+  setTimeout(()=>{
+    const r=A.listen(ω, p.endsWith(' ')?p:p+' ', 14);
+    const cls=r.kind==='SPEAK'?'speak':r.kind==='HOLD'?'hold':'burp';
+    const tiles=r.trits.map(t=>TILE[t]||'▨').join('');
+    let body;
+    if(r.kind==='BURP') body='<div class="bub burp">[ nothing rings ] — it stays silent rather than guess.</div>';
+    else body='<div class="bub'+(r.kind==='HOLD'?' hold':'')+'">'+out(r.text||r.word||'')+'</div>';
+    if(r.trace&&r.trace.length) showWalk(r.trace);
+    add('field','field','<div class="verd v-'+cls+'">'+r.verdict+'</div>'+body
+      +'<div class="tiles">'+tiles+'</div>'
+      +'<div class="cap">ἁρμονία '+r.ἁρμονία.toFixed(3)+' · ῥυθμός '+r.ῥυθμός.toFixed(3)+'</div>');
+    $('go').disabled=false; $('q').focus();
+  },10);
+}
+async function loadEntry(c){
+  setStatus('busy','fetching '+c.title+'…');
+  const tau=await fetchBytes(c.file.replace('Δ','%CE%94').replace('V·001','V%C2%B7001'));
+  // τ.decode throws on a truncated or corrupt body now. Behind a CDN or a gateway that
+  // is exactly what a partial response looks like, and it must say so rather than
+  // leaving an empty field with no reason.
+  let src; try { src=T.decode(tau); }
+  catch(e){ setStatus('off', c.title+' did not decode — '+e.message); return; }
+  build(src, c.title);
+}
+$('lib').onchange=()=>{ const c=REG.corpora.find(x=>x.file===$('lib').value); if(c) loadEntry(c); };
+// WILL. The middle verdict — "my words, not my order" — is the field recognising its
+// own words and being unsure the order is also its own. near() decides that at the
+// geometric mean of the two order poles, which is one point on a line. This is the line.
+// 50 is that same point, so moving nothing changes nothing.
+function sayWill(){
+  const w=+$('will').value/100;
+  if(ω) ω.will=w;
+  if(!ω||!A.willBound){ $('wn').textContent='will '+Math.round(w*100)+'%'; return; }
+  const b=A.willBound(ω,w), P=ω.orderPoles;
+  $('wn').textContent='will '+Math.round(w*100)+'% · ordered '+P.ordered.toFixed(3)
+    +' · here '+b.toFixed(3)+' · scrambled '+P.scrambled.toFixed(3);
+}
+$('will').oninput=sayWill;
+$('lens').onchange=()=>{ LENS=$('lens').value; if(CORPUS) build(CORPUS, $('cn').textContent.split(' · ')[0]); };
+$('file').onchange=e=>{ const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ const raw=new Uint8Array(r.result); let t='';
+    for(let i=0;i<raw.length;i++) t+=String.fromCharCode(raw[i]);   // bytes, not text
+    let src=t;
+    if(t.startsWith('TAU100/1')){ try { src=T.decode(t); }
+      catch(err){ setStatus('off', f.name+' did not decode — '+err.message); return; } }
+    build(src, f.name); };
+  r.readAsArrayBuffer(f); };   // ArrayBuffer, never readAsText — see ENCODING.md
+$('go').onclick=ask;
+$('q').addEventListener('keydown',e=>{ if(e.key==='Enter') ask(); });
+$('clr').onclick=()=>{ $('chat').innerHTML=''; };
+$('mode').onclick=()=>{ document.body.classList.toggle('min');
+  $('mode').textContent=document.body.classList.contains('min')?'exit full screen':'full screen'; };
+$('w').addEventListener('input',()=>{ const v=$('w').value;
+  document.documentElement.style.setProperty('--w',v+'px'); $('wv').textContent=v; });
+</script></body></html>

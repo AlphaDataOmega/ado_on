@@ -1,0 +1,33 @@
+{
+  "schema": "ΑΔΩ/holdout/1",
+  "why": "A fixed foreign probe set for Gate 3. Shipped so the gate does not depend on the size of the registry — otherwise corpus #2 can never pass, because the gate would demand three corpora that do not exist yet.",
+  "works": [
+    {
+      "file": "Δ/holdout/84.txt",
+      "title": "Frankenstein",
+      "author": "Mary Wollstonecraft Shelley",
+      "year": 1818,
+      "bytes": 89998,
+      "sha256": "6bb38b54dbf7cf0fa1b932bd0cc1d64b34d3020aec34ef420685975eef213e8a",
+      "rights": "public domain — author died more than 100 years ago; published before 1931"
+    },
+    {
+      "file": "Δ/holdout/1342.txt",
+      "title": "Pride and Prejudice",
+      "author": "Jane Austen",
+      "year": 1813,
+      "bytes": 89993,
+      "sha256": "bdd9b2bf582448b7ae7eb4ca584cfd14c1ca3607b92e1a7cb52649457e2e1087",
+      "rights": "public domain — author died more than 100 years ago; published before 1931"
+    },
+    {
+      "file": "Δ/holdout/2701.txt",
+      "title": "Moby-Dick",
+      "author": "Herman Melville",
+      "year": 1851,
+      "bytes": 89996,
+      "sha256": "0db6f3095fa972cb59a03d243b16ed4cda58228ff1214de236ede6032a818ac2",
+      "rights": "public domain — author died more than 100 years ago; published before 1931"
+    }
+  ]
+}

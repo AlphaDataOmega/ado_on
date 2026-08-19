@@ -1,0 +1,52 @@
+{
+  "schema": "ΑΔΩ/corpora/1",
+  "doorway": {
+    "rule": "3 x 1/2 = 1.5 — never met, only exceeded",
+    "passes": "2 of 3 reviewers",
+    "why": "the same doorway the field uses. a claim that cannot exceed 1.5 of 3 does not pass, in the code or in the repo."
+  },
+  "corpora": [
+    {
+      "id": "V·001",
+      "title": "The Story",
+      "author": "James Sterling Tuttle",
+      "file": "Δ/V·001",
+      "bytes": 122870,
+      "sha256": "93c73885d36a33dc6f500bcc7f6ae0370269a58dc6b7bee9536ca8bf56c59a14",
+      "source_bytes": 15564,
+      "states": 2919,
+      "window": 8,
+      "note": "the first corpus. written by V, not generated.",
+      "rights": "reserved to the author; not covered by the software licence"
+    }
+  ],
+  "catalogue": {
+    "pattern": "AUTHOR·NNN",
+    "note": "V·001 is the first. an author keeps their prefix; the number is the entry."
+  },
+  "benchmarks": [
+    {
+      "name": "niah-pg19",
+      "corpus": "10 pre-1919 Gutenberg books, 9 fed / 1 held out",
+      "fed_bytes": 5940000,
+      "states": 1077603,
+      "window": 11,
+      "needle_recall": 1.0,
+      "recall_by_depth": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "junk_refused": 1.0,
+      "false_claim_rate": 0.003,
+      "note": "the 0.003 is an address collision, not a fabrication. see BENCHMARK.md"
+    }
+  ]
+}
