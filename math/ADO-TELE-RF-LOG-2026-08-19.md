@@ -270,3 +270,132 @@ A minimal simulator should test the architecture without coding desired emergent
 9. blind tests for closure, bifurcation, reconstruction, and emergent geometry.
 
 This log is a design/derivation checkpoint. Proposed ADO semantics are intentionally labeled as such so future tests can falsify them without rewriting the arithmetic.
+
+---
+
+# Addendum — correction to the RF navigation interpretation
+
+This addendum corrects an overstatement in the initial log.
+
+The earlier text says that in identities such as
+
+```text
+.03 / .01 = 3
+.003 / .001 = 3
+```
+
+`the invariant is 3, not the literal decimal .03.` That wording is too strong for the ADO model developed in the subsequent discussion.
+
+The intended model distinguishes **absolute residual value**, **relative bleed**, and **scale address**. The `.03` quantity is not to be discarded merely because the same ratio can be written at a finer absolute scale. Instead, the proposal is that three `.01` channel contributions define the local three-channel bleed/pressure relation
+
+```text
+.01 + .01 + .01 = .03
+```
+
+while refinement re-addresses the same relation at a deeper scale. Thus the ratio
+
+```text
+.03 / .01 = 3
+```
+
+records dimensional/channel count, while `.03` remains part of the field-state bookkeeping at its stated local scale. These are different facts, not competing definitions.
+
+The addendum also freezes the later hierarchical interpretation that was not fully present in the initial log:
+
+1. **One tile is not the whole field.** A tile is the primitive local `1 + 6 + 3` computation.
+2. Tiles assemble into grids; grids become explicit faces.
+3. Three orthogonal explicit faces plus their Null-inverted phases provide six oriented faces.
+4. The relation among the three explicit face fields generates the contained RF/shadow field.
+5. Completed face/shadow structures can themselves become units at the next scale. The construction is therefore recursively addressable rather than one flat voxel lattice.
+
+The nine active relations at the face/shadow interface have a natural `3 x 3` representation:
+
+```text
+H = [h_xx h_xy h_xz
+     h_yx h_yy h_yz
+     h_zx h_zy h_zz]
+```
+
+with three diagonal/self-channel terms and six oriented cross-channel terms:
+
+```text
+9 = 3 + 6.
+```
+
+Together with the one currently occupied/frozen field reference:
+
+```text
+10 = 1 + 9 = 1 + 3 + 6.
+```
+
+This is the preferred current interpretation of the local ten-state grammar.
+
+## TELE is harmonic address, not only Cartesian location
+
+The earlier log introduced TELE as a relational space address. The later derivation sharpens that definition: TELE should be capable of addressing both a location/container and its harmonic RF signature. A provisional TELE state therefore contains at least
+
+```text
+TELE = (coarse address, phase relation, scale/depth, identity/lineage, RF signature).
+```
+
+The same coarse coordinate can occur at different trajectory addresses and must not be treated as the same full state.
+
+## Field-state transfer correction
+
+The transfer primitive is not `move an interior object directly from A to B`. The implementable operation is:
+
+```text
+shadow_A
+  -> encode onto three explicit face fields
+  -> TELE / transport
+  -> install corresponding face fields at B
+  -> regenerate shadow_B locally.
+```
+
+For two isomorphic containers, the testable target is preservation of the relational/harmonic state under encode-transfer-regenerate and, more strongly, under a full round trip.
+
+This is **field-state reconstruction/transfer** unless and until physical experiments establish a stronger claim. Do not label it matter teleportation in technical documentation.
+
+## HTTP boundary
+
+HTTP is only a transport mechanism between separately running fields. It does not determine the field's next state. An `ado_on` event should carry addressed RF/pressure/phase/trace information; the receiving field resolves the consequence through its own local ADO rule.
+
+Conceptually:
+
+```text
+field A -> encode addressed RF event -> HTTP -> field B -> local resolve.
+```
+
+## Identity correction
+
+Identity does not survive because the transport layer manually holds it fixed. The proposed identity band is the relation that remains invariant while address, RF, phase, residual scale, and other state variables evolve through forward T.
+
+```text
+ID(T(S)) = ID(S)
+```
+
+for ordinary continuation of one trajectory. A genuine bifurcation may create a distinct child identity while retaining parent/lineage trace.
+
+## Current navigation statement
+
+The current ADO simulation hypothesis is therefore better summarized as:
+
+```text
+three coherent addressed channels
++ one frozen NOW
++ explicit Null/inverted phase states
++ residual-field harmonic relation
++ recursive face/shadow scaling
++ forward T
+= a locally computable, recursively addressable simulation substrate.
+```
+
+The shorthand
+
+```text
+(.03 / .01) x 1 = 3
+```
+
+should be read inside that model as: three local channel contributions of `.01` form the `.03` field relation around one frozen/occupied reference; scale refinement can re-address the relation without deleting its trace.
+
+This addendum supersedes any reading of the original log that treats `.03` as irrelevant once the dimension ratio `3` has been extracted.
