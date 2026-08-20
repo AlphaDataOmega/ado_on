@@ -143,13 +143,32 @@ function hashLens(){ const EN=new Float32Array(256*A.DIM);
     for(let j=0;j<A.FILL;j++){ h=(Math.imul(h,1664525)+1013904223)>>>0;
       EN[b*A.DIM+j]=(h>>>8)/8388608-1; } }
   return EN; }
+// ---- lenses. A lens is en(A) -> Float32Array(256*A.DIM), or null for the field's own
+// derived positions. This is the plug for AI lenses: a model that maps each of the 256 byte
+// values to a DIM-vector (its embedding row) slots in beside derived/hash. The field stays
+// model-free and data-agnostic — a lens only changes where bytes SIT, never how the field
+// feels; en() may be async (a model can load on demand).
+const LENSES = {
+  derived: { label:"derived — positions from the corpus's own company", en:()=>null },
+  hash:    { label:'byte hash — model-free, no corpus pass',            en:()=>hashLens() },
+};
+// register an AI lens at runtime, e.g. from a backend script:
+//   registerLens('gpt2','GPT-2 embeddings', async A => { ...return Float32Array(256*A.DIM) })
+window.registerLens = function(id, label, enFn){
+  LENSES[id] = { label, en:enFn };
+  const sel=$('lens');
+  if(sel && !sel.querySelector('option[value="'+id+'"]')){
+    const o=document.createElement('option'); o.value=id; o.textContent=label; sel.appendChild(o); }
+};
 async function fetchBytes(u){ const ab=await (await fetch(u)).arrayBuffer();
   const r=new Uint8Array(ab); let o='';
   for(let i=0;i<r.length;i++) o+=String.fromCharCode(r[i]);
   return o; }
-function build(text, name){
+async function build(text, name){
   setStatus('busy','feeding '+name+'…');
-  ω=new A.Organism().feed(text, LENS==='hash'?hashLens():null);
+  const lens = LENSES[LENS] || LENSES.derived;
+  const en = await lens.en(A);
+  ω=new A.Organism().feed(text, en);
   ω.measureOrderPole(210);
   CORPUS=text;
   $('poles').textContent='ἁρμονία '+ω.poles.answered.toFixed(3)+'/'+ω.poles.stranger.toFixed(3)
@@ -555,7 +574,7 @@ function sayWill(){
     +' · here '+b.toFixed(3)+' · scrambled '+P.scrambled.toFixed(3);
 }
 $('will').oninput=sayWill;
-$('lens').onchange=()=>{ LENS=$('lens').value; if(CORPUS) build(CORPUS, $('cn').textContent.split(' · ')[0]); };
+$('lens').onchange=()=>{ LENS=$('lens').value; if(CORPUS) build(CORPUS, $('cn').textContent.split(' · ')[0]).catch(()=>setStatus('off','lens error')); };
 $('file').onchange=e=>{ const f=e.target.files[0]; if(!f) return;
   const r=new FileReader();
   r.onload=()=>{ const raw=new Uint8Array(r.result); let t='';
