@@ -35,7 +35,7 @@ def unfold(art, dev=None, verify=True):
     def signs(k, D):
         g = torch.Generator(device=dev).manual_seed(meta["seed_base"] + k)
         return (torch.randint(0, 2, (D,), generator=g, device=dev) * 2 - 1).float()
-    out = {}
+    out = {}; shapes = {}
     for g in meta["groups"]:
         Dp, rows, K = g["Dp"], g["rows"], g["K"]
         seg = trits[g["trit_byte0"]:g["trit_byte0"] + g["trit_bytes"]]; per = g["trit_bytes"] // K
@@ -45,9 +45,11 @@ def unfold(art, dev=None, verify=True):
             s = torch.tensor(np.frombuffer(base64.b64decode(g["scales_f16_b64"][k]), np.float16).astype(np.float32),
                              device=dev).view(rows, 1)
             W += fwht(t * s) * signs(k, Dp)
-        for t in g["tensors"]:
-            out[t["key"]] = W[t["row0"]:t["row0"] + t["rows"], :t["D"]].cpu().numpy()
-    return out
+        for t in g["tensors"]:                            # accumulate row-chunks into the full (M,D) tensor
+            key, shape, D = t["key"], t["shape"], t["D"]; M = int(np.prod(shape[:-1]))
+            if key not in out: out[key] = np.zeros((M, D), np.float32); shapes[key] = shape
+            out[key][t["row0"]:t["row0"] + t["rows"]] = W[:t["rows"], :D].cpu().numpy()
+    return {k: v.reshape(shapes[k]) for k, v in out.items()}
 
 if __name__ == "__main__":
     art = sys.argv[1]; tensors = unfold(art)

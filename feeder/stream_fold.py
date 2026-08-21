@@ -55,7 +55,7 @@ def decode(raw, dt):
         return (np.frombuffer(raw, np.uint16).astype(np.uint32) << 16).view(np.float32)
     return np.frombuffer(raw, {"F32": np.float32, "F16": np.float16}[dt]).astype(np.float32)
 
-def main(src, K=8, dev="cuda", out=None, workers=8, cap_gb=6):
+def main(src, K=8, dev="cuda", out=None, workers=8, cap_gb=6, elcap=48_000_000):
     shards = resolve_shards(src)
     print(f"  {len(shards)} shard(s); prefetch workers={workers}, cap={cap_gb}GB", flush=True)
     srcs = []; dtypes = defaultdict(int)               # (rd, base, key, info) in deterministic order
@@ -113,22 +113,27 @@ def main(src, K=8, dev="cuda", out=None, workers=8, cap_gb=6):
         key, info, raw = fut.result()
         arr = decode(raw, info["dtype"]); del raw
         shape = info["shape"]; M = int(np.prod(shape[:-1])); D = shape[-1]; Dp = 1 << (D - 1).bit_length()
-        W = torch.zeros(M, Dp, device=dev); W[:, :D] = torch.from_numpy(arr.reshape(M, D).copy()).to(dev)
-        del arr; total += M * D
-        trit0 = trit_off; scales_k = []
-        R = W.clone(); recon = torch.zeros_like(W)
-        for k in range(K):
-            sg = signs(k, Dp); Rr = fwht(R * sg); s = Rr.abs().mean(1, keepdim=True) + 1e-9
-            t = (Rr / s).round().clamp(-1, 1); pb = pack(t).cpu().numpy().tobytes()
-            Q.put(pb); trit_off += len(pb)
-            recon += fwht(t * s) * sg; R = W - recon; folded += M * Dp * math.log2(3) / 8
-            if out: scales_k.append(s.reshape(-1).to(torch.float16).cpu().numpy().tobytes())
-        if out:
-            meta_groups.append({"Dp": Dp, "rows": M, "K": K,
-                                "tensors": [{"key": key, "shape": shape, "row0": 0, "rows": M, "D": D}],
-                                "trit_byte0": trit0, "trit_bytes": trit_off - trit0,
-                                "scales_f16_b64": [base64.b64encode(x).decode() for x in scales_k]})
-        del W, R, recon; nfold += 1
+        arrM = arr.reshape(M, D); del arr; total += M * D
+        rc = max(1, elcap // Dp)                        # row-chunk so a huge tensor fits VRAM (fold is per-row)
+        for r0 in range(0, M, rc):
+            r1 = min(M, r0 + rc); rows = r1 - r0
+            W = torch.zeros(rows, Dp, device=dev)
+            W[:, :D] = torch.from_numpy(arrM[r0:r1].copy()).to(dev)
+            trit0 = trit_off; scales_k = []
+            R = W.clone(); recon = torch.zeros_like(W)
+            for k in range(K):
+                sg = signs(k, Dp); Rr = fwht(R * sg); s = Rr.abs().mean(1, keepdim=True) + 1e-9
+                t = (Rr / s).round().clamp(-1, 1); pb = pack(t).cpu().numpy().tobytes()
+                Q.put(pb); trit_off += len(pb)
+                recon += fwht(t * s) * sg; R = W - recon; folded += rows * Dp * math.log2(3) / 8
+                if out: scales_k.append(s.reshape(-1).to(torch.float16).cpu().numpy().tobytes())
+            if out:
+                meta_groups.append({"Dp": Dp, "rows": rows, "K": K,
+                                    "tensors": [{"key": key, "shape": shape, "row0": r0, "rows": rows, "D": D}],
+                                    "trit_byte0": trit0, "trit_bytes": trit_off - trit0,
+                                    "scales_f16_b64": [base64.b64encode(x).decode() for x in scales_k]})
+            del W, R, recon
+        nfold += 1
         if nfold % 100 == 0:
             dt = time.time() - T0
             print(f"  [{nfold}/{len(srcs)}] {total/1e6:.0f}M params, {total/dt/1e6:.0f}M/s, inflight {inflight[0]/1e9:.1f}GB", flush=True)
