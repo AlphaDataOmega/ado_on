@@ -21,8 +21,8 @@ def sh(cmd, env=None):
     return subprocess.run(cmd, shell=True, capture_output=True, text=True,
                           env={**os.environ, **(env or {})}).stdout.strip()
 
-def sign(obj, ctype, hours=24):
-    for _ in range(5):                                   # gcloud sign-url fails transiently; empty URL == crash on the box
+def sign(obj, ctype, hours=12):                          # impersonation/system-key signing caps at 12h
+    for _ in range(5):                                   # retry transient failures; empty URL == crash on the box
         u = sh(f'gcloud storage sign-url "{BUCKET}/{obj}" --impersonate-service-account="{SA}" '
                f'--http-verb=PUT --region={REGION} --duration={hours}h '
                f'--headers="content-type={ctype}" --format="value(signed_url)"')
