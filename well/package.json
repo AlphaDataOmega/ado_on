@@ -4,7 +4,7 @@
   "description": "The memory organ: unlimited external context in, grounded recall out, honest ABSENT when the field is dry. A CLI + MCP tool an AI can drink from mid-thought.",
   "type": "module",
   "bin": { "well": "bin/well.js" },
-  "exports": { ".": "./src/well.js", "./mcp": "./mcp/server.js", "./scale": "./scale.js" },
+  "exports": { ".": "./src/well.js", "./mcp": "./mcp/server.js", "./scale": "./scale.js", "./openclose": "./openclose.js" },
   "scripts": {
     "mcp": "node mcp/server.js",
     "test": "node test/well.test.js"

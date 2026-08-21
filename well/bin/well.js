@@ -4,6 +4,8 @@ import { Well } from '../src/well.js';
 import { universes } from '../src/store.js';
 import { readFileSync } from 'node:fs';
 import { encodeBytes, decodeBytes, bitsPerValue, rrmse } from '../scale.js';
+import { closeVec, openVec, top } from '../openclose.js';
+import { denseEmbed } from '../src/dense.js';
 
 const argv = process.argv.slice(2);
 const flags = {};
@@ -61,6 +63,17 @@ switch (cmd) {
     out(flags.json ? r : `scale: ${r.n} bytes · d=${r.d} · ${r.bitsPerValue} bits/value · rmse ${r.rmse} · round-trip ${exact ? 'EXACT' : 'lossy (raise d)'}`);
     break;
   }
+  case 'close': {
+    // the ascent: CLOSE a field into one addressable object at the top, reversibly.
+    const text = flags.file ? readFileSync(flags.file, 'utf8') : rest.join(' ');
+    const vec = denseEmbed(text);
+    const enc = closeVec(vec);
+    const back = openVec(enc);
+    const r = { n: enc.n, levels: enc.T.levels.length, top: +top(enc).toFixed(6),
+      roundTrip: +rrmse(vec, back).toExponential(2) };
+    out(flags.json ? r : `close: ${r.n}-dim field → 1 object over ${r.levels} levels · top=${r.top} · OPEN round-trip err ${r.roundTrip}`);
+    break;
+  }
   default:
     out(`well — the memory organ. unlimited context in, grounded recall out, honest ABSENT when the field is dry.
 
@@ -70,6 +83,7 @@ usage:
   well recall "query"  [-k 8]        draw the nearest grounded content
   well ask "question"                PRESENT (grounded) or ABSENT (no pole)
   well scale "text…" [-d 16]         descend the data-agnostic scale — the dial
+  well close "text…"                 ascend: CLOSE a field into one object (reversible)
   well stats                         what the universe holds
   well list                          the universes on disk
 

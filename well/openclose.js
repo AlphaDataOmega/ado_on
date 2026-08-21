@@ -20,3 +20,13 @@ export function openLevel(S,det){ const n=S.length, v=new Float64Array(3*n);
   return v; }
 export function CLOSE(v){ const levels=[]; let cur=v; while(cur.length>1){ const {S,det}=closeLevel(cur); levels.push(det); cur=S; } return { top: cur, levels }; }
 export function OPEN(T){ let cur=T.top; for(let k=T.levels.length-1;k>=0;k--) cur=openLevel(cur,T.levels[k]); return cur; }
+
+// --- convenience: CLOSE/OPEN an arbitrary-length vector (pad to a power of three) ---
+function nextPow3(n){ let p=1; while(p<n) p*=3; return p; }
+export function closeVec(vec){
+  const pad=nextPow3(vec.length), v=new Float64Array(pad); v.set(vec);
+  return { n: vec.length, T: CLOSE(v) };
+}
+export function openVec(enc){ return OPEN(enc.T).subarray(0, enc.n); }
+// the single addressable object at the top of the ascent (the field's handle)
+export function top(enc){ return enc.T.top[0]; }
