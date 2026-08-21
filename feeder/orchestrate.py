@@ -62,8 +62,11 @@ PYL
 '''
 
 def pick_offer(disk, inet):
+    # inet_up matters as much as inet_down: the folded trits (100s of GB) must be
+    # PUSHED to GCS. Hosts with fast download but crippled upload silently strand a
+    # completed fold. Require both.
     raw = sh(f"vastai search offers 'reliability>0.98 gpu_name=RTX_3090 num_gpus=1 "
-             f"inet_down>{inet} disk_space>{disk+20} rentable=true verified=true' -o 'dph+' --raw")
+             f"inet_down>{inet} inet_up>{inet} disk_space>{disk+20} rentable=true verified=true' -o 'dph+' --raw")
     d = json.loads(raw); return d[0]["id"] if d else None
 
 def launch_part(model, slug, i, lo, hi, K, part_gb, trits_parts, disk, inet, workers=12):
