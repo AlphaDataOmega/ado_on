@@ -35,6 +35,8 @@ def put(url, path, ctype, offset=None, length=None, retries=3):
 
 def main(model, urls_path, K=8):
     urls = json.load(open(urls_path))
+    global PART
+    PART = int(urls.get("part_bytes", PART))
     stream_fold.main(model, K=K, out="/root/fold")
     print("PUT result", put(urls["result"], "/root/fold/result.json", "application/json"), flush=True)
     print("PUT meta",   put(urls["meta"],   "/root/fold/meta.json",   "application/json"), flush=True)
