@@ -35,12 +35,13 @@ def resolve_shards(src):
         return [src]
     base = src.rstrip("/")
     root = base + "/resolve/main/" if "huggingface.co" in base else base + "/"
-    for idx in (root + "model.safetensors.index.json",):
-        try:
-            j = json.loads(urllib.request.urlopen(idx, timeout=30).read())
-            return [root + s for s in sorted(set(j["weight_map"].values()))]
-        except Exception:
-            pass
+    idx = root + "model.safetensors.index.json"
+    try:
+        raw = urllib.request.urlopen(idx, timeout=30).read() if idx.startswith("http") else open(idx, "rb").read()
+        j = json.loads(raw)
+        return [root + s for s in sorted(set(j["weight_map"].values()))]
+    except Exception:
+        pass
     return [root + "model.safetensors"]
 
 def fwht(x):                                          # orthonormal, self-inverse
@@ -55,9 +56,10 @@ def decode(raw, dt):
         return (np.frombuffer(raw, np.uint16).astype(np.uint32) << 16).view(np.float32)
     return np.frombuffer(raw, {"F32": np.float32, "F16": np.float16}[dt]).astype(np.float32)
 
-def main(src, K=8, dev="cuda", out=None, workers=8, cap_gb=6, elcap=48_000_000):
-    shards = resolve_shards(src)
-    print(f"  {len(shards)} shard(s); prefetch workers={workers}, cap={cap_gb}GB", flush=True)
+def main(src, K=8, dev="cuda", out=None, workers=8, cap_gb=6, elcap=48_000_000, shard_lo=0, shard_hi=None):
+    allshards = resolve_shards(src)
+    shards = allshards[shard_lo:shard_hi if shard_hi is not None else len(allshards)]
+    print(f"  {len(shards)}/{len(allshards)} shard(s) [range {shard_lo}:{shard_hi}]; workers={workers}, cap={cap_gb}GB", flush=True)
     srcs = []; dtypes = defaultdict(int)               # (rd, base, key, info) in deterministic order
     for u in shards:
         rd = reader(u); hlen = struct.unpack("<Q", rd(0, 7))[0]
@@ -143,7 +145,8 @@ def main(src, K=8, dev="cuda", out=None, workers=8, cap_gb=6, elcap=48_000_000):
     report = {"model": src, "cid": cid, "K": K, "params_M": round(total/1e6, 1),
               "trits_MB": round(folded/1e6, 1), "trit_payload_bytes": trit_off, "tensors": nfold,
               "wall_s": round(wall, 2), "params_per_s_M": round(total/wall/1e6, 1),
-              "shards": len(shards), "dtypes": dict(dtypes)}
+              "shards": len(shards), "shard_lo": shard_lo, "shard_hi": shard_hi,
+              "total_shards": len(allshards), "dtypes": dict(dtypes)}
     print(f"folded {total/1e6:.0f}M params (K={K}, {nfold} tensors) -> {folded/1e6:.0f}MB trits", flush=True)
     print(f"  wall {wall:.1f}s  ·  {total/wall/1e6:.0f}M params/s end-to-end", flush=True)
     print(f"  CID  {cid}", flush=True)
@@ -159,4 +162,6 @@ if __name__ == "__main__":
     if "--out" in sys.argv: out = sys.argv[sys.argv.index("--out") + 1]
     if "--workers" in sys.argv: workers = int(sys.argv[sys.argv.index("--workers") + 1])
     if "--cap-gb" in sys.argv: cap = int(sys.argv[sys.argv.index("--cap-gb") + 1])
-    main(src, K, out=out, workers=workers, cap_gb=cap)
+    lo = int(sys.argv[sys.argv.index("--shard-lo") + 1]) if "--shard-lo" in sys.argv else 0
+    hi = int(sys.argv[sys.argv.index("--shard-hi") + 1]) if "--shard-hi" in sys.argv else None
+    main(src, K, out=out, workers=workers, cap_gb=cap, shard_lo=lo, shard_hi=hi)
