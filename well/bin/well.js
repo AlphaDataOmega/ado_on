@@ -10,10 +10,13 @@ import { closeVec, openVec, top } from '../openclose.js';
 import { denseEmbed } from '../src/dense.js';
 import { cidv1raw, canonical } from '../src/ipfs.js';
 
+const GATEWAY = process.env.WELL_GATEWAY || 'https://ipfs.ado.earth';   // Cloudflare-cached IPFS reads
 const expDir = () => { const d = join(wellHome(), 'exports'); if (!existsSync(d)) mkdirSync(d, { recursive: true }); return d; };
-function fetchArtifact(cid) {                                   // local exports → ipfs cat → gateway
+async function fetchArtifact(cid) {                             // local exports → CF cache → local ipfs
   const p = join(expDir(), cid + '.wellpack');
   if (existsSync(p)) return readFileSync(p);
+  try { const r = await fetch(GATEWAY + '/' + cid, { signal: AbortSignal.timeout(20000) });   // ipfs.ado.earth edge cache
+    if (r.ok) return Buffer.from(await r.arrayBuffer()); } catch (_) {}
   try { return execSync('ipfs cat ' + cid, { maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'ignore'] }); } catch (_) {}
   return null;
 }
@@ -98,8 +101,8 @@ switch (cmd) {
   case 'import': case 'fork': {
     const cid = rest[0]; if (!cid) { out('usage: well ' + cmd + ' <cid> -u <name>'); break; }
     const name = flags.universe || (cmd + '-' + cid.slice(-8));
-    const bytes = fetchArtifact(cid);
-    if (!bytes) { out('could not fetch ' + cid + ' (not in local exports, ipfs, or gateway)'); break; }
+    const bytes = await fetchArtifact(cid);
+    if (!bytes) { out('could not fetch ' + cid + ' (not in local exports, ipfs.ado.earth, or ipfs)'); break; }
     if (cidv1raw(bytes) !== cid) { out('✗ integrity fail: content does not match the CID'); break; }
     const obj = JSON.parse(bytes.toString('utf8')); obj.universe = name;
     rawWrite(name, obj);
@@ -120,11 +123,21 @@ switch (cmd) {
   case 'pin': {
     const cid = rest[0]; const p = join(expDir(), cid + '.wellpack');
     if (!cid || !existsSync(p)) { out('usage: well pin <cid>   (export it first)'); break; }
-    let ipfsCid = null, pinata = 'skipped';
+    let ipfsCid = null, pinata = 'no token';
+    // add to the local ipfs node — raw CIDv1, so it matches our address exactly
     try { ipfsCid = execSync('ipfs add --raw-leaves --cid-version 1 -Q ' + p, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch (_) {}
+    // pin the EXISTING CID on Pinata (pinByHash preserves the raw CIDv1 — no re-wrap)
     const token = process.env.PINATA_JWT || process.env.PINATA_TOKEN;
-    if (token) pinata = 'have token (POST is best-effort; run `well pin` from a networked host)';
-    out(`pin: ${cid}\n  local ipfs node: ${ipfsCid === cid ? 'added ✓ (' + ipfsCid + ')' : ipfsCid ? 'added as ' + ipfsCid : 'unavailable'}\n  pinata: ${pinata}`);
+    if (token) {
+      try {
+        const r = await fetch('https://api.pinata.cloud/pinning/pinByHash', {
+          method: 'POST', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
+          body: JSON.stringify({ hashToPin: cid, pinataMetadata: { name: 'well:' + cid.slice(-8) } }),
+          signal: AbortSignal.timeout(25000) });
+        pinata = r.ok ? 'pinned ✓' : 'error ' + r.status + ' (' + (await r.text()).slice(0, 80) + ')';
+      } catch (e) { pinata = 'unreachable (run from a networked host): ' + String(e.name || e); }
+    }
+    out(`pin: ${cid}\n  local ipfs: ${ipfsCid === cid ? 'added ✓' : ipfsCid ? 'added as ' + ipfsCid : 'unavailable'}\n  pinata:     ${pinata}\n  served at:  ${GATEWAY}/${cid}  (Cloudflare-cached, immutable)`);
     break;
   }
   default:
