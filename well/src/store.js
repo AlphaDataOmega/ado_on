@@ -12,6 +12,10 @@ import { denseEmbed, packEnc, unpackEnc } from './dense.js';
 import { encode, decode } from '../scale.js';
 
 export function wellHome() { return process.env.WELL_HOME || join(homedir(), '.well'); }
+// raw artifact access — the on-disk compressed field, untouched (for export/import/CID)
+export function rawFile(universe) { return join(wellHome(), (universe || 'default') + '.well.json'); }
+export function rawRead(universe) { return existsSync(rawFile(universe)) ? JSON.parse(readFileSync(rawFile(universe), 'utf8')) : null; }
+export function rawWrite(universe, obj) { const d = wellHome(); if (!existsSync(d)) mkdirSync(d, { recursive: true }); writeFileSync(rawFile(universe), JSON.stringify(obj)); }
 export function depth() { const d = parseInt(process.env.WELL_D || '8', 10); return Number.isFinite(d) && d > 0 ? d : 8; }
 function uniPath(universe) { return join(wellHome(), (universe || 'default') + '.well.json'); }
 

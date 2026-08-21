@@ -69,6 +69,20 @@ its relationship to a key and descend the scale in trits. `d` is the dial —
 there's no floor, only a rate. See [ECOSYSTEM.md](ECOSYSTEM.md) and
 [FINDINGS.md](FINDINGS.md).
 
+**Content-addressed & forkable.** A folded field can leave the machine as a real
+**IPFS CID** and come back by it — git-for-fields on decentralized storage:
+
+```bash
+well export -u dogs             # fold the field → bafkrei…  (a real IPFS CIDv1)
+well pin  <cid>                 # make it retrievable (local ipfs node / pinata)
+well fork <cid> -u mine         # pull a shared field into your own, CID-verified
+well merge dogs space -o both   # superpose two fields into one → a new CID
+```
+
+Import/fork **verify the CID** — a single changed byte moves it, so a shared
+field is tamper-evident. The CID is computed locally (dependency-free) and
+matches `ipfs add --raw-leaves --cid-version 1` exactly.
+
 **Stored compressed.** The well doesn't just *offer* the codec — it stores its
 field on it. Each chunk's dense embedding is folded to depth `$WELL_D` (default
 8) and packed as trits, so a universe on disk is a fraction of the float size

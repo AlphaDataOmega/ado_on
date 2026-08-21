@@ -1,11 +1,22 @@
 #!/usr/bin/env node
 // well — the CLI. feed / recall / ask / stats / list, over a named universe.
 import { Well } from '../src/well.js';
-import { universes } from '../src/store.js';
-import { readFileSync } from 'node:fs';
+import { universes, rawRead, rawWrite, wellHome } from '../src/store.js';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { execSync } from 'node:child_process';
 import { encodeBytes, decodeBytes, bitsPerValue, rrmse } from '../scale.js';
 import { closeVec, openVec, top } from '../openclose.js';
 import { denseEmbed } from '../src/dense.js';
+import { cidv1raw, canonical } from '../src/ipfs.js';
+
+const expDir = () => { const d = join(wellHome(), 'exports'); if (!existsSync(d)) mkdirSync(d, { recursive: true }); return d; };
+function fetchArtifact(cid) {                                   // local exports → ipfs cat → gateway
+  const p = join(expDir(), cid + '.wellpack');
+  if (existsSync(p)) return readFileSync(p);
+  try { return execSync('ipfs cat ' + cid, { maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'ignore'] }); } catch (_) {}
+  return null;
+}
 
 const argv = process.argv.slice(2);
 const flags = {};
@@ -14,6 +25,7 @@ for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '-u' || argv[i] === '--universe') flags.universe = argv[++i];
   else if (argv[i] === '-k') flags.k = parseInt(argv[++i], 10);
   else if (argv[i] === '-d') flags.d = parseInt(argv[++i], 10);
+  else if (argv[i] === '-o' || argv[i] === '--out') flags.o = argv[++i];
   else if (argv[i] === '-f' || argv[i] === '--file') flags.file = argv[++i];
   else if (argv[i] === '--json') flags.json = true;
   else rest.push(argv[i]);
@@ -74,6 +86,47 @@ switch (cmd) {
     out(flags.json ? r : `close: ${r.n}-dim field → 1 object over ${r.levels} levels · top=${r.top} · OPEN round-trip err ${r.roundTrip}`);
     break;
   }
+  case 'export': {
+    // fold a universe's compressed field into a content-addressed artifact (a real IPFS CID)
+    const raw = rawRead(U); if (!raw) { out('no such universe: ' + U); break; }
+    const bytes = canonical(raw); const cid = cidv1raw(bytes);
+    writeFileSync(join(expDir(), cid + '.wellpack'), bytes);
+    out(flags.json ? { cid, universe: U, chunks: raw.chunks.length, bytes: bytes.length }
+      : `export: ${U} (${raw.chunks.length} chunks, ${bytes.length}B) → ${cid}\n  pin it:  well pin ${cid}\n  fork it: well fork ${cid} -u <name>`);
+    break;
+  }
+  case 'import': case 'fork': {
+    const cid = rest[0]; if (!cid) { out('usage: well ' + cmd + ' <cid> -u <name>'); break; }
+    const name = flags.universe || (cmd + '-' + cid.slice(-8));
+    const bytes = fetchArtifact(cid);
+    if (!bytes) { out('could not fetch ' + cid + ' (not in local exports, ipfs, or gateway)'); break; }
+    if (cidv1raw(bytes) !== cid) { out('✗ integrity fail: content does not match the CID'); break; }
+    const obj = JSON.parse(bytes.toString('utf8')); obj.universe = name;
+    rawWrite(name, obj);
+    out(flags.json ? { cid, universe: name, chunks: obj.chunks.length, verified: true }
+      : `${cmd}: ${cid} → universe "${name}" (${obj.chunks.length} chunks, CID-verified ✓)${cmd === 'fork' ? '\n  now diverge it:  well -u ' + name + ' feed "…"' : ''}`);
+    break;
+  }
+  case 'merge': {
+    const [ua, ub] = rest; const out_u = flags.o || flags.out || (ua + '+' + ub);
+    const a = rawRead(ua), b = rawRead(ub);
+    if (!a || !b) { out('usage: well merge <a> <b> -o <out>   (both universes must exist)'); break; }
+    const chunks = [...a.chunks, ...b.chunks].map((c, i) => ({ ...c, id: 'c' + i }));  // superpose = union of fields
+    rawWrite(out_u, { universe: out_u, meta: { fed: chunks.length, d: (a.meta.d || b.meta.d || 8), merged: [ua, ub] }, chunks });
+    out(flags.json ? { universe: out_u, chunks: chunks.length, from: [ua, ub] }
+      : `merge: ${ua} (${a.chunks.length}) + ${ub} (${b.chunks.length}) → "${out_u}" (${chunks.length} chunks)\n  export it: well export -u ${out_u}`);
+    break;
+  }
+  case 'pin': {
+    const cid = rest[0]; const p = join(expDir(), cid + '.wellpack');
+    if (!cid || !existsSync(p)) { out('usage: well pin <cid>   (export it first)'); break; }
+    let ipfsCid = null, pinata = 'skipped';
+    try { ipfsCid = execSync('ipfs add --raw-leaves --cid-version 1 -Q ' + p, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch (_) {}
+    const token = process.env.PINATA_JWT || process.env.PINATA_TOKEN;
+    if (token) pinata = 'have token (POST is best-effort; run `well pin` from a networked host)';
+    out(`pin: ${cid}\n  local ipfs node: ${ipfsCid === cid ? 'added ✓ (' + ipfsCid + ')' : ipfsCid ? 'added as ' + ipfsCid : 'unavailable'}\n  pinata: ${pinata}`);
+    break;
+  }
   default:
     out(`well — the memory organ. unlimited context in, grounded recall out, honest ABSENT when the field is dry.
 
@@ -84,6 +137,11 @@ usage:
   well ask "question"                PRESENT (grounded) or ABSENT (no pole)
   well scale "text…" [-d 16]         descend the data-agnostic scale — the dial
   well close "text…"                 ascend: CLOSE a field into one object (reversible)
+  well export -u <u>                 fold a universe → a content-addressed IPFS CID
+  well import <cid> [-u name]        pull a field back by CID (integrity-verified)
+  well fork <cid> -u <name>          fork a shared field into your own universe
+  well merge <a> <b> -o <out>        superpose two fields into one
+  well pin <cid>                     make an exported field retrievable (ipfs/pinata)
   well stats                         what the universe holds
   well list                          the universes on disk
 
