@@ -22,7 +22,12 @@ def _unpack(b, n, Dp, dev):                           # base-3 5/byte -> trits {
 def unfold(art, dev=None, verify=True):
     dev = dev or ("cuda" if torch.cuda.is_available() else "cpu")
     meta = json.load(open(os.path.join(art, "meta.json")))
-    trits = open(os.path.join(art, "trits"), "rb").read()
+    tp = os.path.join(art, "trits")
+    if os.path.exists(tp):
+        trits = open(tp, "rb").read()
+    else:                                             # reassemble streamed parts (remote artifact)
+        parts = sorted(f for f in os.listdir(art) if f.startswith("trits.part."))
+        trits = b"".join(open(os.path.join(art, p), "rb").read() for p in parts)
     if verify:
         cid = "bafkrei" + hashlib.sha256(hashlib.sha256(trits).digest()).hexdigest()[:52]
         if cid != meta["cid"]:
