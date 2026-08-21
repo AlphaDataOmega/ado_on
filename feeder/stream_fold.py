@@ -19,11 +19,21 @@ from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 
 def reader(src):
-    """returns read(start,end_inclusive)->bytes. URL uses HTTP Range; path seeks (thread-safe: reopen)."""
+    """returns read(start,end_inclusive)->bytes. URL uses HTTP Range with retries
+    (HF drops connections mid-read on long TB-scale pulls; a short/failed read must
+    re-request, not crash). Path seeks (thread-safe: reopen)."""
     if src.startswith("http"):
         def rd(a, b):
-            req = urllib.request.Request(src, headers={"Range": f"bytes={a}-{b}"})
-            return urllib.request.urlopen(req, timeout=120).read()
+            want = b - a + 1
+            for att in range(8):
+                try:
+                    req = urllib.request.Request(src, headers={"Range": f"bytes={a}-{b}"})
+                    data = urllib.request.urlopen(req, timeout=120).read()
+                    if len(data) == want: return data           # complete range
+                except Exception:
+                    pass
+                time.sleep(min(2 ** att, 20))                    # backoff, then re-request the range
+            raise IOError(f"range {a}-{b} of {src} failed after 8 retries")
         return rd
     def rd(a, b):                                      # reopen per read so it's thread-safe
         with open(src, "rb") as f: f.seek(a); return f.read(b - a + 1)
