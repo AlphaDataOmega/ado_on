@@ -37,8 +37,10 @@ def main(model, urls_path, K=8):
     urls = json.load(open(urls_path))
     global PART
     PART = int(urls.get("part_bytes", PART))
+    sh = urls.get("shard_hi")
     stream_fold.main(model, K=K, out="/root/fold",
-                     workers=int(urls.get("workers", 12)), cap_gb=int(urls.get("cap_gb", 8)))
+                     workers=int(urls.get("workers", 12)), cap_gb=int(urls.get("cap_gb", 8)),
+                     shard_lo=int(urls.get("shard_lo", 0)), shard_hi=int(sh) if sh is not None else None)
     print("PUT result", put(urls["result"], "/root/fold/result.json", "application/json"), flush=True)
     print("PUT meta",   put(urls["meta"],   "/root/fold/meta.json",   "application/json"), flush=True)
     tp = "/root/fold/trits"; sz = os.path.getsize(tp); parts = urls["trits_parts"]
