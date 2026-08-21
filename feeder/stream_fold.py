@@ -22,6 +22,22 @@ def reader(src):
     def rd(a, b): f.seek(a); return f.read(b - a + 1)
     return rd
 
+
+def resolve_shards(src):
+    """single .safetensors -> [src]; a HF repo/base -> all shards from the index."""
+    if src.endswith(".safetensors"):
+        return [src]
+    base = src.rstrip("/")
+    root = base + "/resolve/main/" if "huggingface.co" in base else base + "/"
+    for idx in (root + "model.safetensors.index.json",):
+        try:
+            j = json.loads(urllib.request.urlopen(idx, timeout=30).read())
+            shards = sorted(set(j["weight_map"].values()))
+            return [root + s for s in shards]
+        except Exception:
+            pass
+    return [root + "model.safetensors"]
+
 def fwht(x):                                          # orthonormal, self-inverse
     M, n = x.shape; h = 1
     while h < n:
@@ -30,10 +46,15 @@ def fwht(x):                                          # orthonormal, self-invers
     return x * (n ** -0.5)
 
 def main(src, K=8, dev="cuda"):
-    rd = reader(src)
-    hlen = struct.unpack("<Q", rd(0, 7))[0]
-    header = json.loads(rd(8, 8 + hlen - 1)); base = 8 + hlen
-    tensors = [(k, v) for k, v in header.items() if k != "__metadata__" and v["dtype"] in ("F32", "F16", "BF16")]
+    shards = resolve_shards(src)
+    print(f"  {len(shards)} shard(s) to stream")
+    sources = []                                       # (rd, base, info) across all shards
+    for u in shards:
+        rd = reader(u); hlen = struct.unpack("<Q", rd(0, 7))[0]
+        hdr = json.loads(rd(8, 8 + hlen - 1)); b = 8 + hlen
+        for k, v in hdr.items():
+            if k != "__metadata__" and v["dtype"] in ("F32", "F16", "BF16"):
+                sources.append((rd, b, v))
     SG = {}
     def signs(k, D):
         if (k, D) not in SG:
@@ -54,9 +75,9 @@ def main(src, K=8, dev="cuda"):
     th = threading.Thread(target=hasher); th.start()
 
     T0 = time.time(); groups = defaultdict(list); total = 0; t_read = 0
-    for _, info in tensors:
+    for rd, b, info in sources:
         if len(info["shape"]) < 2: continue
-        s, e = info["data_offsets"]; t0 = time.time(); raw = rd(base + s, base + e - 1); t_read += time.time() - t0
+        s, e = info["data_offsets"]; t0 = time.time(); raw = rd(b + s, b + e - 1); t_read += time.time() - t0
         if info["dtype"] == "BF16":
             arr = (np.frombuffer(raw, np.uint16).astype(np.uint32) << 16).view(np.float32)
         else:
