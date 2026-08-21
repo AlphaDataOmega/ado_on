@@ -110,6 +110,24 @@ switch (cmd) {
       : `${cmd}: ${cid} → universe "${name}" (${obj.chunks.length} chunks, CID-verified ✓)${cmd === 'fork' ? '\n  now diverge it:  well -u ' + name + ' feed "…"' : ''}`);
     break;
   }
+  case 'publish': {
+    // export → put the raw block on the network → ask the Cloud Function to pin it
+    // (the pinning token stays server-side; this host never needs it).
+    const raw = rawRead(U); if (!raw) { out('no such universe: ' + U); break; }
+    const bytes = canonical(raw); const cid = cidv1raw(bytes);
+    const p = join(expDir(), cid + '.wellpack'); writeFileSync(p, bytes);
+    try { execSync('ipfs add --raw-leaves --cid-version 1 -Q ' + p, { stdio: ['ignore', 'pipe', 'ignore'] }); } catch (_) {}
+    const url = process.env.WELL_PIN_URL;
+    if (!url) { out(`export: ${U} → ${cid}\n  set WELL_PIN_URL to the well-pin Cloud Function to publish (token stays server-side):\n  WELL_PIN_URL=<function-url> well publish -u ${U}\n  meanwhile: served at ${GATEWAY}/${cid}`); break; }
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ cid }), signal: AbortSignal.timeout(30000) });
+      const j = await r.json().catch(() => ({}));
+      out(flags.json ? { cid, ...j } : r.ok ? `publish: ${U} → ${cid}\n  pinned via cloud function (${j.mode || 'ok'})\n  served at: ${j.gateway || GATEWAY + '/' + cid}`
+        : `publish: pin request failed (${r.status}) ${JSON.stringify(j).slice(0, 120)}`);
+    } catch (e) { out(`publish: exported ${cid}, but the pin endpoint was unreachable (${String(e.name || e)})`); }
+    break;
+  }
   case 'merge': {
     const [ua, ub] = rest; const out_u = flags.o || flags.out || (ua + '+' + ub);
     const a = rawRead(ua), b = rawRead(ub);
@@ -155,6 +173,7 @@ usage:
   well fork <cid> -u <name>          fork a shared field into your own universe
   well merge <a> <b> -o <out>        superpose two fields into one
   well pin <cid>                     make an exported field retrievable (ipfs/pinata)
+  well publish -u <u>                export + pin via the Cloud Function ($WELL_PIN_URL)
   well stats                         what the universe holds
   well list                          the universes on disk
 
