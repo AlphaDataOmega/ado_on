@@ -11,6 +11,7 @@ import { denseEmbed } from '../src/dense.js';
 import { cidv1raw, canonical } from '../src/ipfs.js';
 
 const GATEWAY = process.env.WELL_GATEWAY || 'https://ipfs.ado.earth';   // Cloudflare-cached IPFS reads
+const PIN_URL = 'https://well-pin-lw2gkwc2ya-uc.a.run.app';             // well-pin Cloud Function (token server-side)
 const expDir = () => { const d = join(wellHome(), 'exports'); if (!existsSync(d)) mkdirSync(d, { recursive: true }); return d; };
 async function fetchArtifact(cid) {                             // local exports → CF cache → local ipfs
   const p = join(expDir(), cid + '.wellpack');
@@ -111,21 +112,21 @@ switch (cmd) {
     break;
   }
   case 'publish': {
-    // export → put the raw block on the network → ask the Cloud Function to pin it
-    // (the pinning token stays server-side; this host never needs it).
+    // export → upload the field to the well-pin Cloud Function, which pins it to
+    // IPFS with the token held SERVER-SIDE. Pinata v3 returns the same raw CIDv1
+    // we compute locally, so the address is identical everywhere.
     const raw = rawRead(U); if (!raw) { out('no such universe: ' + U); break; }
     const bytes = canonical(raw); const cid = cidv1raw(bytes);
-    const p = join(expDir(), cid + '.wellpack'); writeFileSync(p, bytes);
-    try { execSync('ipfs add --raw-leaves --cid-version 1 -Q ' + p, { stdio: ['ignore', 'pipe', 'ignore'] }); } catch (_) {}
-    const url = process.env.WELL_PIN_URL;
-    if (!url) { out(`export: ${U} → ${cid}\n  set WELL_PIN_URL to the well-pin Cloud Function to publish (token stays server-side):\n  WELL_PIN_URL=<function-url> well publish -u ${U}\n  meanwhile: served at ${GATEWAY}/${cid}`); break; }
+    writeFileSync(join(expDir(), cid + '.wellpack'), bytes);
+    const url = process.env.WELL_PIN_URL || PIN_URL;
     try {
-      const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ cid }), signal: AbortSignal.timeout(30000) });
+      const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/octet-stream' },
+        body: bytes, signal: AbortSignal.timeout(40000) });
       const j = await r.json().catch(() => ({}));
-      out(flags.json ? { cid, ...j } : r.ok ? `publish: ${U} → ${cid}\n  pinned via cloud function (${j.mode || 'ok'})\n  served at: ${j.gateway || GATEWAY + '/' + cid}`
-        : `publish: pin request failed (${r.status}) ${JSON.stringify(j).slice(0, 120)}`);
-    } catch (e) { out(`publish: exported ${cid}, but the pin endpoint was unreachable (${String(e.name || e)})`); }
+      const match = j.cid === cid ? ' (CID matches local ✓)' : j.cid ? ' (pinned as ' + j.cid + ')' : '';
+      out(flags.json ? { cid, ...j } : r.ok ? `publish: ${U} → ${cid}${match}\n  pinned via cloud function, token server-side\n  served at: ${j.gateway || GATEWAY + '/' + cid}  (Cloudflare-cached)`
+        : `publish: exported ${cid}, but pinning failed (${r.status}) ${JSON.stringify(j).slice(0, 140)}`);
+    } catch (e) { out(`publish: exported ${cid}, pin endpoint unreachable (${String(e.name || e)}) — served locally at ${GATEWAY}/${cid} once pinned`); }
     break;
   }
   case 'merge': {
